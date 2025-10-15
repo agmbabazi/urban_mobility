@@ -1,2 +1,3 @@
+data/database_dump.sql filter=lfs diff=lfs merge=lfs -text
 *.zip !text !filter !merge !diff
 *.tar.gz !text !filter !merge !diff
