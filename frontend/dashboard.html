@@ -22,19 +22,18 @@
     th{background:#fbfdff;font-weight:600}
     .table-wrap{max-height:420px;overflow:auto}
     .chart-row{display:flex;gap:16px;margin-bottom:12px}
-    .chart-card{flex:1;min-height:220px}
+    .chart-card{flex:1}
     .muted{color:var(--muted);font-size:13px}
     .small{font-size:12px}
     .pill{display:inline-block;padding:6px 8px;border-radius:999px;background:#eef5ff;color:var(--accent);font-weight:600}
     .details{white-space:pre-wrap;font-family:monospace;font-size:12px}
-    canvas{width:100% !important;height:220px !important;}
   </style>
 </head>
 <body>
   <header>
     <h1>Urban Mobility — Dashboard</h1>
     <div class="controls">
-      <input id="apiBase" type="text" value="" style="width:260px" />
+      <input id="apiBase" type="text" value="http://127.0.0.1:5000" style="width:260px" />
       <button id="loadBtn">Load data</button>
       <button id="sampleBtn" title="Load a small built-in sample">Sample data</button>
     </div>
@@ -96,17 +95,23 @@
         </div>
       </div>
 
+      <div class="card">
+        <label>API info</label>
+        <div class="muted small">This dashboard will attempt these endpoints on the API base (in order): <code>/trips</code>, <code>/transactions</code>, <code>/data</code>, <code>/api/trips</code>.</div>
+        <div style="margin-top:8px"><span id="status" class="pill">idle</span></div>
+      </div>
+
     </aside>
 
     <main>
       <div class="card chart-row">
         <div class="chart-card">
           <label>Trips per day</label>
-          <canvas id="tripsChart"></canvas>
+          <canvas id="tripsChart" height="120"></canvas>
         </div>
         <div class="chart-card">
           <label>Distance distribution (bins)</label>
-          <canvas id="distChart"></canvas>
+          <canvas id="distChart" height="120"></canvas>
         </div>
       </div>
 
@@ -137,6 +142,7 @@
   </div>
 
   <script>
+    // --- Basic state ---
     let originalData = [];
     let filtered = [];
     let page = 0;
@@ -154,7 +160,7 @@
     document.getElementById('prevPage').addEventListener('click', ()=>{ if(page>0){ page--; renderTable(); }});
     document.getElementById('nextPage').addEventListener('click', ()=>{ if((page+1)*rowsPerPage < filtered.length){ page++; renderTable(); }});
 
-    function setStatus(s){ document.getElementById('status').textContent = s; }
+    function setStatus(s){ const el = document.getElementById('status'); el.textContent = s; }
 
     async function loadFromApi(){
       setStatus('probing API...');
@@ -167,60 +173,163 @@
           const res = await fetch(url);
           if(!res.ok) continue;
           const j = await res.json();
-          if(Array.isArray(j) && j.length>0){ originalData = j; success = true; setStatus('loaded from ' + p); break; }
-          if(j && Array.isArray(j.data)){ originalData = j.data; success = true; setStatus('loaded from ' + p + ' (data)'); break; }
-        }catch(err){}
+          if(Array.isArray(j) && j.length>0){
+            originalData = j;
+            success = true;
+            setStatus('loaded from ' + p);
+            break;
+          }
+          // if object with key 'data'
+          if(j && Array.isArray(j.data)){
+            originalData = j.data;
+            success = true;
+            setStatus('loaded from ' + p + ' (data)');
+            break;
+          }
+        }catch(err){
+          // skip
+        }
       }
-      if(!success){ setStatus('no array response'); alert('Could not load API data.'); return; }
+      if(!success){ setStatus('no array response from API'); alert('Could not find a suitable endpoint — try running the backend or load sample data.'); return; }
       page = 0; applyFilters();
     }
 
     function loadSample(){
+      // small inline sample resembling NYC taxi columns
       originalData = [
-        {ID:1,tpep_pickup_datetime:'2021-01-01T08:10:00',tpep_dropoff_datetime:'2021-01-01T08:25:00',Passenger_count:1,trip_distance:3.2,Payment_type:1,fare_amount:12.5},
-        {ID:2,tpep_pickup_datetime:'2021-01-01T09:05:00',tpep_dropoff_datetime:'2021-01-01T09:20:00',Passenger_count:2,trip_distance:5.8,Payment_type:2,fare_amount:18.0},
-        {ID:3,tpep_pickup_datetime:'2021-01-02T10:00:00',tpep_dropoff_datetime:'2021-01-02T10:30:00',Passenger_count:1,trip_distance:10.4,Payment_type:1,fare_amount:28.0},
-        {ID:4,tpep_pickup_datetime:'2021-01-02T11:00:00',tpep_dropoff_datetime:'2021-01-02T11:05:00',Passenger_count:1,trip_distance:0.6,Payment_type:1,fare_amount:4.5}
+        {ID:1,VendorID:2,tpep_pickup_datetime:'2021-01-01T08:10:00',tpep_dropoff_datetime:'2021-01-01T08:25:00',Passenger_count:1,trip_distance:3.2,Payment_type:1,fare_amount:12.5,PULocationID:142,DOLocationID:236},
+        {ID:2,VendorID:2,tpep_pickup_datetime:'2021-01-01T09:05:00',tpep_dropoff_datetime:'2021-01-01T09:20:00',Passenger_count:2,trip_distance:5.8,Payment_type:2,fare_amount:18.0,PULocationID:236,DOLocationID:61},
+        {ID:3,VendorID:1,tpep_pickup_datetime:'2021-01-02T10:00:00',tpep_dropoff_datetime:'2021-01-02T10:30:00',Passenger_count:1,trip_distance:10.4,Payment_type:1,fare_amount:28.0,PULocationID:61,DOLocationID:142},
+        {ID:4,VendorID:1,tpep_pickup_datetime:'2021-01-02T11:00:00',tpep_dropoff_datetime:'2021-01-02T11:05:00',Passenger_count:1,trip_distance:0.6,Payment_type:1,fare_amount:4.5,PULocationID:142,DOLocationID:142}
       ];
       page = 0; applyFilters(); setStatus('sample loaded');
     }
 
     function applyFilters(){
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo = document.getElementById('dateTo').value;
+      const minDist = parseFloat(document.getElementById('minDist').value) || null;
+      const maxDist = parseFloat(document.getElementById('maxDist').value) || null;
+      const minFare = parseFloat(document.getElementById('minFare').value) || null;
+      const maxFare = parseFloat(document.getElementById('maxFare').value) || null;
+      const payment = document.getElementById('paymentType').value;
       const search = document.getElementById('search').value.trim().toLowerCase();
-      filtered = originalData.filter(r => !search || JSON.stringify(r).toLowerCase().includes(search));
-      renderTable(); renderCharts();
+
+      filtered = originalData.filter(r => {
+        // normalize some fields
+        const pick = (r.tpep_pickup_datetime || r.pickup || r.pickup_datetime || r.pickup_time || '').slice(0,10);
+        if(dateFrom && (!pick || pick < dateFrom)) return false;
+        if(dateTo && (!pick || pick > dateTo)) return false;
+        const dist = parseFloat(r.trip_distance || r.distance || r.Trip_distance || 0) || 0;
+        if(minDist !== null && dist < minDist) return false;
+        if(maxDist !== null && maxDist > 0 && dist > maxDist) return false;
+        const fare = parseFloat(r.fare_amount || r.Fare_amount || r.total_amount || 0) || 0;
+        if(minFare !== null && fare < minFare) return false;
+        if(maxFare !== null && maxFare > 0 && fare > maxFare) return false;
+        const pay = String(r.Payment_type || r.payment_type || r.payment || r.Payment || '');
+        if(payment && pay !== payment) return false;
+        if(search){
+          const hay = JSON.stringify(r).toLowerCase();
+          if(!hay.includes(search)) return false;
+        }
+        return true;
+      });
+
+      // sort
+      const sortBy = document.getElementById('sortBy').value;
+      const dir = document.getElementById('sortDir').value === 'desc' ? -1 : 1;
+      filtered.sort((a,b)=>{
+        const av = getFieldValue(a, sortBy);
+        const bv = getFieldValue(b, sortBy);
+        if(av == null && bv == null) return 0;
+        if(av == null) return 1*dir;
+        if(bv == null) return -1*dir;
+        if(!isNaN(Date.parse(av)) && !isNaN(Date.parse(bv))) return (new Date(av) - new Date(bv)) * dir;
+        if(typeof av === 'number' && typeof bv === 'number') return (av-bv)*dir;
+        return String(av).localeCompare(String(bv)) * dir;
+      });
+
+      page = 0;
+      renderTable();
+      renderCharts();
     }
 
-    function resetFilters(){ filtered = [...originalData]; page=0; renderTable(); renderCharts(); }
+    function resetFilters(){
+      document.getElementById('dateFrom').value = '';
+      document.getElementById('dateTo').value = '';
+      document.getElementById('minDist').value = '';
+      document.getElementById('maxDist').value = '';
+      document.getElementById('minFare').value = '';
+      document.getElementById('maxFare').value = '';
+      document.getElementById('paymentType').value = '';
+      document.getElementById('search').value = '';
+      filtered = [...originalData];
+      page = 0; renderTable(); renderCharts();
+    }
+
+    function getFieldValue(r, k){
+      if(k === 'tpep_pickup_datetime') return r.tpep_pickup_datetime || r.pickup || r.pickup_datetime || r.tpep_pickup_datetime;
+      if(k === 'trip_distance') return parseFloat(r.trip_distance || r.distance || 0) || 0;
+      if(k === 'fare_amount') return parseFloat(r.fare_amount || r.fare || r.total_amount || 0) || 0;
+      return r[k];
+    }
 
     function renderTable(){
-      const tbody = document.querySelector('#tripsTable tbody'); tbody.innerHTML='';
+      const tbody = document.querySelector('#tripsTable tbody'); tbody.innerHTML = '';
       rowsPerPage = parseInt(document.getElementById('rowsPerPage').value || 25);
       const start = page * rowsPerPage;
-      const pageRows = filtered.slice(start, start+rowsPerPage);
+      const pageRows = filtered.slice(start, start + rowsPerPage);
       for(const r of pageRows){
         const tr = document.createElement('tr');
-        tr.innerHTML=`<td>${r.ID}</td><td>${r.tpep_pickup_datetime}</td><td>${r.tpep_dropoff_datetime}</td><td>${r.Passenger_count}</td><td>${r.trip_distance}</td><td>${r.fare_amount}</td><td>${r.Payment_type}</td>`;
-        tr.addEventListener('click',()=>{document.getElementById('details').textContent=JSON.stringify(r,null,2);});
+        const id = r.ID || r.id || r.trip_id || '';
+        const pickup = r.tpep_pickup_datetime || r.pickup || r.pickup_datetime || '';
+        const drop = r.tpep_dropoff_datetime || r.dropoff || r.dropoff_datetime || '';
+        const pax = r.Passenger_count || r.passenger_count || r.passengers || '';
+        const dist = getFieldValue(r,'trip_distance');
+        const fare = getFieldValue(r,'fare_amount');
+        const pay = r.Payment_type || r.payment_type || r.payment || '';
+        tr.innerHTML = `<td>${escapeHtml(id)}</td><td>${escapeHtml(pickup)}</td><td>${escapeHtml(drop)}</td><td>${escapeHtml(pax)}</td><td>${escapeHtml(Number(dist).toFixed(2))}</td><td>${escapeHtml(Number(fare).toFixed(2))}</td><td>${escapeHtml(pay)}</td>`;
+        tr.addEventListener('click', ()=>{ document.getElementById('details').textContent = JSON.stringify(r, null, 2); });
         tbody.appendChild(tr);
       }
+      document.getElementById('summary').textContent = `${filtered.length} trips — showing ${start+1} to ${Math.min(start+pageRows.length, filtered.length)}`;
+      document.getElementById('pager').textContent = `Page ${page+1} / ${Math.max(1, Math.ceil(filtered.length / rowsPerPage))}`;
     }
+
+    function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
     function renderCharts(){
-      const byDay = {}; const distVals=[];
-      for(const r of filtered){ const d=r.tpep_pickup_datetime?.slice(0,10)||'unknown'; byDay[d]=(byDay[d]||0)+1; distVals.push(r.trip_distance||0); }
-      const dayLabels=Object.keys(byDay).sort(); const dayCounts=dayLabels.map(l=>byDay[l]);
-      if(tripsChart){ tripsChart.destroy(); }
-      tripsChart=new Chart(document.getElementById('tripsChart'),{type:'bar',data:{labels:dayLabels,datasets:[{label:'Trips',data:dayCounts,backgroundColor:'#0f62fe'}]},options:{responsive:true,maintainAspectRatio:false,animation:false}});
+      // trips per day
+      const byDay = {};
+      const distVals = [];
+      for(const r of filtered){
+        const dfull = r.tpep_pickup_datetime || r.pickup || r.pickup_datetime || '';
+        const day = dfull ? dfull.slice(0,10) : 'unknown';
+        byDay[day] = (byDay[day] || 0) + 1;
+        distVals.push(getFieldValue(r,'trip_distance') || 0);
+      }
+      const dayLabels = Object.keys(byDay).sort();
+      const dayCounts = dayLabels.map(l=>byDay[l]);
 
-      const maxD=Math.max(1,...distVals); const bins=8; const binSize=maxD/bins; const hist=new Array(bins).fill(0);
-      for(const v of distVals){const i=Math.min(bins-1,Math.floor(v/binSize));hist[i]++;}
-      const binLabels=hist.map((_,i)=>`${(i*binSize).toFixed(1)}-${((i+1)*binSize).toFixed(1)}`);
-      if(distChart){ distChart.destroy(); }
-      distChart=new Chart(document.getElementById('distChart'),{type:'bar',data:{labels:binLabels,datasets:[{label:'Trips',data:hist,backgroundColor:'#0f62fe'}]},options:{responsive:true,maintainAspectRatio:false,animation:false}});
+      if(tripsChart) tripsChart.destroy();
+      const ctx = document.getElementById('tripsChart').getContext('2d');
+      tripsChart = new Chart(ctx, { type: 'bar', data: { labels: dayLabels, datasets: [{ label: 'Trips', data: dayCounts }] }, options: { responsive:true, maintainAspectRatio:false } });
+
+      // distance histogram (bins)
+      const maxD = Math.max(1, ...distVals);
+      const bins = 8; const binSize = maxD / bins;
+      const hist = new Array(bins).fill(0);
+      for(const v of distVals){ const i = Math.min(bins-1, Math.floor(v / binSize)); hist[i]++; }
+      const binLabels = hist.map((_,i)=>`${(i*binSize).toFixed(1)}-${((i+1)*binSize).toFixed(1)}`);
+      if(distChart) distChart.destroy();
+      const ctx2 = document.getElementById('distChart').getContext('2d');
+      distChart = new Chart(ctx2, { type:'bar', data:{ labels: binLabels, datasets:[{ label:'Trips', data: hist }] }, options:{ responsive:true, maintainAspectRatio:false } });
     }
 
+    // try sample load automatically (user can override)
     loadSample();
   </script>
 </body>
 </html>
+
+
