@@ -34,7 +34,7 @@
   <header>
     <h1>Urban Mobility — Dashboard</h1>
     <div class="controls">
-      <input id="apiBase" type="text" value="http://127.0.0.1:5000" style="width:260px" />
+      <input id="apiBase" type="text" value="" style="width:260px" />
       <button id="loadBtn">Load data</button>
       <button id="sampleBtn" title="Load a small built-in sample">Sample data</button>
     </div>
@@ -149,7 +149,7 @@
     let rowsPerPage = 25;
     let tripsChart, distChart;
 
-    const endpointsToTry = ['/trips','/transactions','/data','/api/trips'];
+    const endpointsToTry = ['http://127.0.0.1:5000/api/trip','http://127.0.0.1:5000/transactions','http://127.0.0.1:5000/data','http://127.0.0.1:5000/api/trips'];
 
     document.getElementById('loadBtn').addEventListener('click', loadFromApi);
     document.getElementById('sampleBtn').addEventListener('click', loadSample);
