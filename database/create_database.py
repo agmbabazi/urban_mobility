@@ -1,16 +1,16 @@
-# connect_db.py
-import mysql.connector
-from config import DB_USER, DB_PASSWORD, DB_HOST, DB_NAME
+#!/usr/bin/env python
+# This script initializes a SQLite3 database for the project
 
-# Create connection
-conn = mysql.connector.connect(
-    user=DB_USER,
-    password=DB_PASSWORD,
-    host=DB_HOST
-)
+import sqlite3
+from config import DB_PATH
 
-cursor = conn.cursor()
-cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
-conn.database = DB_NAME
+def create_database():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        print(f"Database created at {DB_PATH}")
+        conn.close()
+    except Exception as e:
+        print(f"Error creating database: {e}")
 
-print(f"Connected to database: {DB_NAME}")
+if __name__ == "__main__":
+    create_database()

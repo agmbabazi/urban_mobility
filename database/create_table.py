@@ -1,38 +1,59 @@
-# create_table.py
-from sqlalchemy import create_engine, types
-from config import DB_USER, DB_PASSWORD, DB_HOST, DB_NAME
+#!/usr/bin/env python
+# This script creates tables in the SQLite database
 
-table_name = 'yellow_tripdata_2025_08'
+import sqlite3
+from config import DB_PATH
 
-dtype_mapping = {
-    'VendorID': types.Integer(),
-    'tpep_pickup_datetime': types.DATETIME(),
-    'tpep_dropoff_datetime': types.DATETIME(),
-    'passenger_count': types.Integer(),
-    'trip_distance': types.Float(),
-    'RatecodeID': types.Integer(),
-    'store_and_fwd_flag': types.String(1),
-    'PULocationID': types.Integer(),
-    'DOLocationID': types.Integer(),
-    'payment_type': types.Integer(),
-    'fare_amount': types.Float(),
-    'extra': types.Float(),
-    'mta_tax': types.Float(),
-    'tip_amount': types.Float(),
-    'tolls_amount': types.Float(),
-    'improvement_surcharge': types.Float(),
-    'congestion_surcharge': types.Float(),
-    'Airport_fee': types.Float(),
-    'total_amount': types.Float(),
-    'calculated_total_amount': types.Float(),
-    'trip_duration_min': types.Float(),
-    'speed_mph': types.Float(),
-    'fare_per_mile': types.Float(),
-    'tip_pct': types.Float(),
-    'idle_trip_flag': types.Integer()
-}
+def create_tables():
+    """
+    Connects to the SQLite database and creates the required tables if they don't exist.
+    """
+    try:
+        # Connect to the SQLite database
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
 
-# SQLAlchemy engine
-engine = create_engine(
-    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
-)
+        # Create the trips table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            VendorID INTEGER,
+            tpep_pickup_datetime TEXT,
+            tpep_dropoff_datetime TEXT,
+            passenger_count INTEGER,
+            trip_distance REAL,
+            RatecodeID INTEGER,
+            store_and_fwd_flag TEXT,
+            PULocationID INTEGER,
+            DOLocationID INTEGER,
+            payment_type INTEGER,
+            fare_amount REAL,
+            extra REAL,
+            mta_tax REAL,
+            tip_amount REAL,
+            tolls_amount REAL,
+            improvement_surcharge REAL,
+            congestion_surcharge REAL,
+            Airport_fee REAL,
+            total_amount REAL,
+            calculated_total_amount REAL,
+            trip_duration_min REAL,
+            speed_mph REAL,
+            fare_per_mile REAL,
+            tip_pct REAL,
+            idle_trip_flag INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        # Commit and close
+        conn.commit()
+        conn.close()
+
+        print("Tables created successfully.")
+
+    except Exception as e:
+        print(f"Error creating tables: {e}")
+
+if __name__ == "__main__":
+    create_tables()
