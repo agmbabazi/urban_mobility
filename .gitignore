@@ -1,2 +1,7 @@
 venv/
 .env
+
+sqlite/taxi_data.db
+sqlite/data.db
+
+data/train.csv
