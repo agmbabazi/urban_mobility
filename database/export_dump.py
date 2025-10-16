@@ -1,101 +1,52 @@
 #!/usr/bin/env python
-# This script exports your MySQL database as a SQL dump file in smaller chunks
+# This script exports the SQLite database into a single SQL dump file, overwriting if content is the same
 
-import mysql.connector
+import sqlite3
 from pathlib import Path
-from config import DB_USER, DB_PASSWORD, DB_HOST, DB_NAME
-import os
-
-DB_CONFIG = {
-    "user": DB_USER,
-    "password": DB_PASSWORD,
-    "host": DB_HOST,
-    "database": DB_NAME
-}
-
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-
-def write_chunk(file_path, lines):
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+from datetime import datetime
+from config import DB_PATH
+import filecmp
 
 def export_database():
+    """
+    Exports the entire SQLite database into a single SQL dump file.
+    Overwrites the existing dump if the content is the same.
+    """
     try:
+        # Create an output directory for the dump if it doesn't exist
         output_dir = Path("data")
         output_dir.mkdir(exist_ok=True)
 
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-        cursor.execute("SHOW TABLES;")
-        tables = [row[0] for row in cursor.fetchall()]
+        # Set the dump file path (no timestamp, just a fixed file)
+        dump_file = output_dir / "database_dump.sql"
 
-        chunk_index = 1
-        current_size = 0
-        buffer = []
+        # Connect to SQLite
+        conn = sqlite3.connect(DB_PATH)
 
-        def new_chunk_path(index):
-            return output_dir / f"database_dump.part{index:03d}.sql"
-
-        print("Connecting to database...")
-
-        for table in tables:
-            print(f"Exporting table: {table}")
-
-            # Table structure
-            cursor.execute(f"SHOW CREATE TABLE `{table}`;")
-            create_stmt = cursor.fetchone()[1]
-            lines = [
-                f"\n-- Structure for table `{table}`\n",
-                f"DROP TABLE IF EXISTS `{table}`;\n",
-                f"{create_stmt};\n\n"
-            ]
-            for line in lines:
-                buffer.append(line)
-                current_size += len(line.encode('utf-8'))
-                if current_size >= MAX_FILE_SIZE:
-                    write_chunk(new_chunk_path(chunk_index), buffer)
-                    chunk_index += 1
-                    buffer = []
-                    current_size = 0
-
-            # Table data
-            cursor.execute(f"SELECT * FROM `{table}`;")
-            rows = cursor.fetchall()
-            if rows:
-                columns = [desc[0] for desc in cursor.description]
-                buffer.append(f"-- Data for table `{table}`\n")
-                current_size += len(buffer[-1].encode('utf-8'))
-                for row in rows:
-                    values = []
-                    for val in row:
-                        if val is None:
-                            values.append("NULL")
-                        elif isinstance(val, (int, float)):
-                            values.append(str(val))
-                        else:
-                            escaped = str(val).replace("'", "''")
-                            values.append(f"'{escaped}'")
-                    insert_line = f"INSERT INTO `{table}` ({', '.join(columns)}) VALUES ({', '.join(values)});\n"
-                    buffer.append(insert_line)
-                    current_size += len(insert_line.encode('utf-8'))
-                    if current_size >= MAX_FILE_SIZE:
-                        write_chunk(new_chunk_path(chunk_index), buffer)
-                        chunk_index += 1
-                        buffer = []
-                        current_size = 0
-
-        # Write remaining buffer
-        if buffer:
-            write_chunk(new_chunk_path(chunk_index), buffer)
-
-        cursor.close()
+        # Generate the SQL dump as a string
+        new_dump_lines = []
+        for line in conn.iterdump():
+            new_dump_lines.append(f"{line}\n")
         conn.close()
 
-        print("\nDump completed successfully!")
-        print(f"Files saved in: {output_dir.resolve()}")
+        # Check if the dump file already exists
+        if dump_file.exists():
+            with open(dump_file, "r", encoding="utf-8") as f:
+                old_lines = f.readlines()
+
+            # Only overwrite if the content is different
+            if old_lines == new_dump_lines:
+                print("Database dump is identical. No changes made.")
+                return
+
+        # Write the new dump to the file
+        with open(dump_file, "w", encoding="utf-8") as f:
+            f.writelines(new_dump_lines)
+
+        print(f"Database exported successfully to: {dump_file.resolve()}")
 
     except Exception as e:
-        print(f"\nError: {e}")
+        print(f"Error exporting database: {e}")
 
 if __name__ == "__main__":
     export_database()
