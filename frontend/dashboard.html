@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Urban Mobility — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--accent:#0f62fe;--muted:#666}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f6f8fb;color:#111}
+    header{background:white;padding:16px 20px;display:flex;gap:12px;align-items:center;box-shadow:0 1px 0 rgba(0,0,0,0.05)}
+    header h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center;margin-left:auto}
+    .container{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px}
+    .card{background:white;padding:12px;border-radius:8px;box-shadow:0 6px 18px rgba(16,24,40,0.03)}
+    .sidebar .card{margin-bottom:12px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input[type=text],select,input[type=number],input[type=date]{width:100%;padding:8px;border-radius:6px;border:1px solid #e6e9ef}
+    button{background:var(--accent);color:white;border:0;padding:8px 10px;border-radius:6px;cursor:pointer}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;border-bottom:1px solid #f0f2f7;text-align:left}
+    th{background:#fbfdff;font-weight:600}
+    .table-wrap{max-height:420px;overflow:auto}
+    .chart-row{display:flex;gap:16px;margin-bottom:12px}
+    .chart-card{flex:1;min-height:220px}
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:12px}
+    .pill{display:inline-block;padding:6px 8px;border-radius:999px;background:#eef5ff;color:var(--accent);font-weight:600}
+    .details{white-space:pre-wrap;font-family:monospace;font-size:12px}
+    canvas{width:100% !important;height:220px !important;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Urban Mobility — Dashboard</h1>
+    <div class="controls">
+      <input id="apiBase" type="text" value="" style="width:260px" />
+      <button id="loadBtn">Load data</button>
+      <button id="sampleBtn" title="Load a small built-in sample">Sample data</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <aside class="sidebar">
+      <div class="card">
+        <label>Quick filters</label>
+        <div style="display:grid;gap:8px">
+          <div>
+            <label class="small">Date from</label>
+            <input id="dateFrom" type="date" />
+          </div>
+          <div>
+            <label class="small">Date to</label>
+            <input id="dateTo" type="date" />
+          </div>
+          <div>
+            <label class="small">Min distance (miles)</label>
+            <input id="minDist" type="number" step="0.01" placeholder="e.g. 0" />
+          </div>
+          <div>
+            <label class="small">Max distance (miles)</label>
+            <input id="maxDist" type="number" step="0.01" placeholder="e.g. 30" />
+          </div>
+          <div>
+            <label class="small">Min fare</label>
+            <input id="minFare" type="number" step="0.01" placeholder="e.g. 0" />
+          </div>
+          <div>
+            <label class="small">Max fare</label>
+            <input id="maxFare" type="number" step="0.01" placeholder="e.g. 100" />
+          </div>
+          <div>
+            <label class="small">Payment type</label>
+            <select id="paymentType"><option value="">(any)</option><option value="1">Credit card (1)</option><option value="2">Cash (2)</option></select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="applyFilters">Apply</button>
+            <button id="resetFilters" style="background:#fff;color:var(--accent);border:1px solid #d7e3ff">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Sort & pagination</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="sortBy">
+            <option value="tpep_pickup_datetime">Pickup time</option>
+            <option value="trip_distance">Distance</option>
+            <option value="fare_amount">Fare</option>
+          </select>
+          <select id="sortDir"><option value="asc">Asc</option><option value="desc" selected>Desc</option></select>
+        </div>
+        <div style="margin-top:8px">
+          <label class="small">Rows per page</label>
+          <select id="rowsPerPage"><option>10</option><option selected>25</option><option>50</option></select>
+        </div>
+      </div>
+
+    </aside>
+
+    <main>
+      <div class="card chart-row">
+        <div class="chart-card">
+          <label>Trips per day</label>
+          <canvas id="tripsChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <label>Distance distribution (bins)</label>
+          <canvas id="distChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div><label>Trips</label><div class="muted small" id="summary"></div></div>
+          <div><input id="search" type="text" placeholder="search by pickup/dropoff or ID" style="padding:8px;border-radius:6px;border:1px solid #e6e9ef"/></div>
+        </div>
+        <div class="table-wrap">
+          <table id="tripsTable">
+            <thead>
+              <tr><th>ID</th><th>Pickup</th><th>Dropoff</th><th>Passengers</th><th>Distance</th><th>Fare</th><th>Payment</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <div class="muted small" id="pager"></div>
+          <div><button id="prevPage">Prev</button><button id="nextPage">Next</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Details</label>
+        <div id="details" class="details">Click a row to see full JSON detail</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let originalData = [];
+    let filtered = [];
+    let page = 0;
+    let rowsPerPage = 25;
+    let tripsChart, distChart;
+
+    const endpointsToTry = ['/trips','/transactions','/data','/api/trips'];
+
+    document.getElementById('loadBtn').addEventListener('click', loadFromApi);
+    document.getElementById('sampleBtn').addEventListener('click', loadSample);
+    document.getElementById('applyFilters').addEventListener('click', applyFilters);
+    document.getElementById('resetFilters').addEventListener('click', resetFilters);
+    document.getElementById('rowsPerPage').addEventListener('change', (e)=>{ rowsPerPage = parseInt(e.target.value); renderTable(); });
+    document.getElementById('search').addEventListener('input', ()=>{ applyFilters(); });
+    document.getElementById('prevPage').addEventListener('click', ()=>{ if(page>0){ page--; renderTable(); }});
+    document.getElementById('nextPage').addEventListener('click', ()=>{ if((page+1)*rowsPerPage < filtered.length){ page++; renderTable(); }});
+
+    function setStatus(s){ document.getElementById('status').textContent = s; }
+
+    async function loadFromApi(){
+      setStatus('probing API...');
+      const base = document.getElementById('apiBase').value.replace(/\/+$/,'');
+      let success = false;
+      for(const p of endpointsToTry){
+        const url = base + p;
+        try{
+          setStatus('trying ' + url);
+          const res = await fetch(url);
+          if(!res.ok) continue;
+          const j = await res.json();
+          if(Array.isArray(j) && j.length>0){ originalData = j; success = true; setStatus('loaded from ' + p); break; }
+          if(j && Array.isArray(j.data)){ originalData = j.data; success = true; setStatus('loaded from ' + p + ' (data)'); break; }
+        }catch(err){}
+      }
+      if(!success){ setStatus('no array response'); alert('Could not load API data.'); return; }
+      page = 0; applyFilters();
+    }
+
+    function loadSample(){
+      originalData = [
+        {ID:1,tpep_pickup_datetime:'2021-01-01T08:10:00',tpep_dropoff_datetime:'2021-01-01T08:25:00',Passenger_count:1,trip_distance:3.2,Payment_type:1,fare_amount:12.5},
+        {ID:2,tpep_pickup_datetime:'2021-01-01T09:05:00',tpep_dropoff_datetime:'2021-01-01T09:20:00',Passenger_count:2,trip_distance:5.8,Payment_type:2,fare_amount:18.0},
+        {ID:3,tpep_pickup_datetime:'2021-01-02T10:00:00',tpep_dropoff_datetime:'2021-01-02T10:30:00',Passenger_count:1,trip_distance:10.4,Payment_type:1,fare_amount:28.0},
+        {ID:4,tpep_pickup_datetime:'2021-01-02T11:00:00',tpep_dropoff_datetime:'2021-01-02T11:05:00',Passenger_count:1,trip_distance:0.6,Payment_type:1,fare_amount:4.5}
+      ];
+      page = 0; applyFilters(); setStatus('sample loaded');
+    }
+
+    function applyFilters(){
+      const search = document.getElementById('search').value.trim().toLowerCase();
+      filtered = originalData.filter(r => !search || JSON.stringify(r).toLowerCase().includes(search));
+      renderTable(); renderCharts();
+    }
+
+    function resetFilters(){ filtered = [...originalData]; page=0; renderTable(); renderCharts(); }
+
+    function renderTable(){
+      const tbody = document.querySelector('#tripsTable tbody'); tbody.innerHTML='';
+      rowsPerPage = parseInt(document.getElementById('rowsPerPage').value || 25);
+      const start = page * rowsPerPage;
+      const pageRows = filtered.slice(start, start+rowsPerPage);
+      for(const r of pageRows){
+        const tr = document.createElement('tr');
+        tr.innerHTML=`<td>${r.ID}</td><td>${r.tpep_pickup_datetime}</td><td>${r.tpep_dropoff_datetime}</td><td>${r.Passenger_count}</td><td>${r.trip_distance}</td><td>${r.fare_amount}</td><td>${r.Payment_type}</td>`;
+        tr.addEventListener('click',()=>{document.getElementById('details').textContent=JSON.stringify(r,null,2);});
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderCharts(){
+      const byDay = {}; const distVals=[];
+      for(const r of filtered){ const d=r.tpep_pickup_datetime?.slice(0,10)||'unknown'; byDay[d]=(byDay[d]||0)+1; distVals.push(r.trip_distance||0); }
+      const dayLabels=Object.keys(byDay).sort(); const dayCounts=dayLabels.map(l=>byDay[l]);
+      if(tripsChart){ tripsChart.destroy(); }
+      tripsChart=new Chart(document.getElementById('tripsChart'),{type:'bar',data:{labels:dayLabels,datasets:[{label:'Trips',data:dayCounts,backgroundColor:'#0f62fe'}]},options:{responsive:true,maintainAspectRatio:false,animation:false}});
+
+      const maxD=Math.max(1,...distVals); const bins=8; const binSize=maxD/bins; const hist=new Array(bins).fill(0);
+      for(const v of distVals){const i=Math.min(bins-1,Math.floor(v/binSize));hist[i]++;}
+      const binLabels=hist.map((_,i)=>`${(i*binSize).toFixed(1)}-${((i+1)*binSize).toFixed(1)}`);
+      if(distChart){ distChart.destroy(); }
+      distChart=new Chart(document.getElementById('distChart'),{type:'bar',data:{labels:binLabels,datasets:[{label:'Trips',data:hist,backgroundColor:'#0f62fe'}]},options:{responsive:true,maintainAspectRatio:false,animation:false}});
+    }
+
+    loadSample();
+  </script>
+</body>
+</html>
