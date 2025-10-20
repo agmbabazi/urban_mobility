@@ -132,4 +132,4 @@ There are no automated tests included yet. To add tests, create a `tests/` direc
 
 
 ## Data transformationeady in use: run `flask run --port <other-port>` or stop the process using the port.
-- Debugger not showing detailed errors: set `FLASK_ENV=development` (do not enable in production
+- Debugger not showing detailed errors: set `FLASK_ENV=development` (do not enable in production as it can expose sensitive information)
