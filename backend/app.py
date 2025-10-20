@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy import func
 from models.models import TripModel,db
+from flask import render_template
 
 # Initialize app and DB
 app = Flask(__name__)
@@ -21,6 +22,9 @@ with app.app_context():
     db.create_all()
 
 # Resources
+@app.route('/')
+def welcome():
+    return render_template('dashboard.html')
 class Trip(Resource):
     def get(self):
         start = request.args.get("start")

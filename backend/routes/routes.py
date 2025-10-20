@@ -1,1 +1,0 @@
-# We will create the different resources for the app business logic on the routes folder
