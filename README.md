@@ -4,14 +4,20 @@
 urban mobility is a web based application that it's purpose is to analyze, visualize, and explore the taxi trip data in New York City. This app uses a flask backend API and a static HTML, CSS, and JS for the fronted.
 
   . The frontend dashboard is http://127.0.0.1:5500/frontend/dashboard.html
+  
   . And the backend server runs on http://127.0.0.1:5000
 
 ## features
 . A dashboard that shows trip statistics
+
 . RESTful APIs to fetche and summarize trip data
+
 . Using SQLAlchemy for integration with the SQLite database
+
 . Clean backend structure
+
 . Fetching requests from the frontend to the backend APIs
+
 . Dataset following NYC taxi public dataser schema
 
 
