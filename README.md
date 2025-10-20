@@ -7,6 +7,8 @@ urban mobility is a web based application that it's purpose is to analyze, visua
   
   . And the backend server runs on http://127.0.0.1:5000
 
+  . Video walkthrough: https://youtu.be/UwjAfB-5aCA
+
 ## features
 . A dashboard that shows trip statistics
 
