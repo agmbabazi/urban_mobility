@@ -149,7 +149,8 @@
     let rowsPerPage = 25;
     let tripsChart, distChart;
 
-    const endpointsToTry = ['http://127.0.0.1:5000/api/trip','http://127.0.0.1:5000/transactions','http://127.0.0.1:5000/data','http://127.0.0.1:5000/api/trips'];
+const API_BASE = "http://127.0.0.1:5000";
+const endpointsToTry = [`${API_BASE}/api/trips`, `${API_BASE}/api/summary`];
 
     document.getElementById('loadBtn').addEventListener('click', loadFromApi);
     document.getElementById('sampleBtn').addEventListener('click', loadSample);

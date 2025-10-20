@@ -3,11 +3,13 @@ from flask_restful import Resource, Api
 from pathlib import Path
 from datetime import datetime
 from sqlalchemy import func
-from models.models import TripModel,db
+from models.models import TripModel, db
+from flask_cors import CORS  
 
 # Initialize app and DB
 app = Flask(__name__)
 api = Api(app)
+CORS(app)  # ✅ Enable CORS for frontend (http://127.0.0.1:5500 or local files)
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR.parent / "sqlite" / "data.db"
@@ -19,6 +21,11 @@ db.init_app(app)
 # Create tables if they don't exist
 with app.app_context():
     db.create_all()
+
+# ✅ Root route for testing server is alive
+@app.route('/')
+def home():
+    return jsonify({"message": "API is running", "endpoints": ["/api/trips", "/api/summary"]})
 
 # Resources
 class Trip(Resource):
@@ -81,15 +88,20 @@ class Trip(Resource):
                 "passenger_count": trip.passenger_count,
             }
 
+        # ✅ Frontend expects "data" instead of "rows"
         return jsonify({
-            "rows": [to_dict(t) for t in trips],
+            "data": [to_dict(t) for t in trips],
             "total": total
         })
-    
+
+# ✅ Prevent 404 when frontend calls `/api/trip` accidentally
+@app.route('/api/trip', methods=['GET'])
+def invalid_trip_list():
+    return jsonify({"error": "Use /api/trips instead of /api/trip"}), 400
+
 class TripDetail(Resource):
     def get(self, trip_id):
         trip = TripModel.query.get(trip_id)
-
         if not trip:
             return jsonify({"error": "Trip not found"}), 404
 
@@ -106,7 +118,7 @@ class TripDetail(Resource):
             "distance_km": trip.distance_km,
             "duration_min": trip.duration_min,
             "passenger_count": trip.passenger_count,
-        })    
+        })
 
 class Summary(Resource):
     def get(self):
@@ -115,7 +127,6 @@ class Summary(Resource):
 
         query = TripModel.query
 
-        # --- Filter by date range ---
         if start:
             try:
                 start_date = datetime.strptime(start, "%Y-%m-%d")
@@ -130,7 +141,6 @@ class Summary(Resource):
             except ValueError:
                 pass
 
-        # --- Aggregated values ---
         agg_result = query.with_entities(
             func.count().label("total_trips"),
             func.avg(TripModel.distance_km).label("avg_distance_km"),
@@ -138,7 +148,6 @@ class Summary(Resource):
             func.sum(func.coalesce(TripModel.fare_amount, 0) + func.coalesce(TripModel.tip_amount, 0)).label("total_revenue")
         ).first()
 
-        # --- Trips per hour ---
         trips_by_hour = (
             query.with_entities(
                 func.strftime('%H', TripModel.pickup_datetime).label("hour"),
@@ -159,11 +168,10 @@ class Summary(Resource):
             "trips_per_hour": trips_per_hour
         })
 
-
+# Register routes
 api.add_resource(Trip, '/api/trips')
 api.add_resource(TripDetail, '/api/trip/<string:trip_id>')
 api.add_resource(Summary, '/api/summary')
-
 
 if __name__ == '__main__':
     app.run(debug=True)
